@@ -5,12 +5,12 @@ paper.install(window);
 import TweenMax from 'gsap';
 import _ from 'lodash';
 
-import { SHAPE_COUNT, WALL_RESTITUTION, BODY_RESTITUTION, BODY_FRICTION, BODY_AIR_FRICTION, WALL_THICKNESS, SHAPE_RADIUS, GRAVITY_STRENGTH, CLICK_STRENGTH } from './CONSTANTS.js';
+import { SHAPE_COUNT, WALL_RESTITUTION, BODY_RESTITUTION, BODY_FRICTION, BODY_AIR_FRICTION, BODY_BASE_MASS, BODY_RAND_MASS, BODY_COLLISSION_FORCE, WALL_THICKNESS, SHAPE_RADIUS, GRAVITY_STRENGTH, OWN_GRAVITY_STRENGTH, CLICK_STRENGTH, EXAMPLE_SVG } from './CONSTANTS.js';
 
 
 const Kalidoscope = () => {
 	let raf, i = 0, x = 0, then, now, tick = 0, delta = 1, isInit = false;
-	let walls = [], bodies = [], shapes = [[],[], [], []];
+	let walls = [], bodies = [], shapes = [[],[], [], []], collissions = [];
 	let engine;
 
 	const canvas = document.getElementsByClassName('interactive-background')[0];
@@ -33,6 +33,7 @@ const Kalidoscope = () => {
 		friction: BODY_FRICTION,
 		frictionAir: BODY_AIR_FRICTION,
 		frictionStatic: 0,
+		density: 0.001,
 	}
 
 	const init = () => {
@@ -68,6 +69,7 @@ const Kalidoscope = () => {
 				wallOptions
 			), //right
 		];
+		walls.forEach(w => w.label = 'wall');
 		
 		const len = Math.sqrt((window.innerWidth * window.innerWidth) + (window.innerHeight * window.innerHeight)) / 2 * 0.8;
 		// const len = Math.min(window.innerWidth, window.innerHeight) * 0.5;
@@ -78,19 +80,22 @@ const Kalidoscope = () => {
 			const pos = new Victor(-1, -1).normalize().rotateByDeg(Math.random() * 45 - 90).multiply(new Victor(scale * -1, scale * -1));
 			if (pos.y < (window.innerHeight * -1) + SHAPE_RADIUS) pos.y = (window.innerHeight * -1) + SHAPE_RADIUS + 10;
 			if (pos.x < (window.innerWidth * -1) + SHAPE_RADIUS) pos.x = (window.innerWidth * -1) + SHAPE_RADIUS + 10;
-			console.log(pos);
 
-			bodies.push(Bodies.circle(pos.x, pos.y, SHAPE_RADIUS, bodyOptions))
+			bodyOptions.density = Math.random() * BODY_RAND_MASS + BODY_BASE_MASS;
+			// if (Math.random() > 0.5) bodyOptions.density *= -1;
+			// b.mass = 
+			// bodyOptions.mass = -0.00000001;
+			const b = Bodies.circle(pos.x, pos.y, SHAPE_RADIUS, bodyOptions);
+			b.velocity = new Victor(0, 0);
+			b.label = 'shape';
+			b.gravity = { x: 0, y: 0 };
+			b.gravitySpeed = { x: Math.random() * 0.005 + 0.003, y: Math.random() * 0.005 + 0.003 };
+			// b.maxDensity = Math.random() * BODY_RAND_MASS + BODY_BASE_MASS;
+			// b.densityOffset = Math.random() * 1000;
+			// b.densitySpeed = Math.random() * 0.012;
+
+			bodies.push(b)
 		}
-
-		// bodies = [
-		// 	Bodies.circle(window.innerWidth * -0.2, window.innerHeight * -0.20, SHAPE_RADIUS, bodyOptions),
-		// 	Bodies.circle(window.innerWidth * -0.1, window.innerHeight * -0.1, SHAPE_RADIUS, bodyOptions),
-		// 	Bodies.circle(window.innerWidth * -0.15, window.innerHeight * -0.3, SHAPE_RADIUS, bodyOptions),
-		// 	// Bodies.rectangle(window.innerWidth * -0.2, window.innerHeight * -0.20, SHAPE_RADIUS, SHAPE_RADIUS, bodyOptions),
-		// 	// Bodies.rectangle(window.innerWidth * -0.1, window.innerHeight * -0.1, SHAPE_RADIUS, SHAPE_RADIUS, bodyOptions),
-		// 	// Bodies.rectangle(window.innerWidth * -0.15, window.innerHeight * -0.3, SHAPE_RADIUS, SHAPE_RADIUS, bodyOptions),
-		// ];
 
 		bodies.forEach(b => {
 			const p0 = new Point (b.position.x, b.position.y);
@@ -120,6 +125,8 @@ const Kalidoscope = () => {
 		World.add(engine.world, allBodies);
 		Engine.run(engine);
 		Events.on(engine, 'afterUpdate', update);
+		Events.on(engine, 'beforeUpdate', onBeforeUpdate);
+		Events.on(engine, 'collisionStart', onCollisionStart);
 		window.addEventListener('mousedown', onClick);
 		window.addEventListener('touchstart', onClick);
 
@@ -132,6 +139,8 @@ const Kalidoscope = () => {
 		isInit = false;
 		Engine.clear(engine);
 		Events.off(engine, 'afterUpdate', update);
+		Events.off(engine, 'beforeUpdate', onBeforeUpdate);
+		Events.off(engine, 'collisionStart', onCollisionStart);
 		engine = undefined;
 		then = undefined;
 		project.activeLayer.removeChildren();
@@ -162,8 +171,13 @@ const Kalidoscope = () => {
 	}
 
 	const onClick = (e) => {
-		let x = e.touches ? e.touches[0].clientX : e.clientX - window.innerWidth * 0.5;
-		let y = e.touches ? e.touches[0].clientY : e.clientY - window.innerHeight * 0.5;
+		let x = e.touches ? e.touches[0].clientX : e.clientX;
+		let y = e.touches ? e.touches[0].clientY : e.clientY;
+
+		x -= window.innerWidth * 0.5;
+		y -= window.innerHeight * 0.5;
+
+
 
 		if (x > 0) x *= -1;
 		if (y > 0) y *= -1;
@@ -173,15 +187,40 @@ const Kalidoscope = () => {
 		bodies.forEach(b => {
 			const mP = new Victor(x, y);
 			const dist = mP.distance(new Victor(b.position.x, b.position.y));
-			let scale = (1 - dist / Math.min(window.innerWidth * 0.3, window.innerHeight * 0.3)) * CLICK_STRENGTH;
+			let scale = (1 - dist / Math.min(window.innerWidth * 0.5, window.innerHeight * 0.5)) * CLICK_STRENGTH;
 			scale = Math.max(scale, 0);
-
+			console.log(scale);
 			const force = new Victor(
 				b.position.x - mP.x,
 				b.position.y - mP.y,
 			).norm().multiply(new Victor(scale, scale));
 
 			Body.applyForce(b, mP, force);
+		});
+	};
+
+	const onBeforeUpdate = () => {
+		collissions.forEach(p => {
+			const forceA = new Victor(
+				p.bodyA.position.x - p.bodyB.position.x,
+				p.bodyA.position.y - p.bodyB.position.y,
+			).norm().multiply(new Victor(BODY_COLLISSION_FORCE, BODY_COLLISSION_FORCE));
+			Body.applyForce(p.bodyA, p.bodyB.position, forceA);
+
+			const forceB = new Victor(
+				p.bodyB.position.x - p.bodyA.position.x,
+				p.bodyB.position.y - p.bodyA.position.y,
+			).norm().multiply(new Victor(BODY_COLLISSION_FORCE, BODY_COLLISSION_FORCE));
+			Body.applyForce(p.bodyB, p.bodyA.position, forceB);
+		});
+
+		collissions = [];
+	}
+
+	const onCollisionStart = (e) => {
+		const pairs = e.pairs;
+		pairs.forEach(p => {
+			collissions.push(p);
 		});
 	}
 
@@ -190,18 +229,35 @@ const Kalidoscope = () => {
 		then = now;
 		now = new Date().getTime();
 		tick += delta;
+		// console.log(tick);
 
-		engine.world.gravity.x = Math.cos(tick / 150) * GRAVITY_STRENGTH;
-		engine.world.gravity.y = Math.cos(tick / 70) * GRAVITY_STRENGTH;
+		engine.world.gravity.x = Math.cos(tick * 0.006) * GRAVITY_STRENGTH;
+		engine.world.gravity.y = Math.cos(tick * 0.01) * GRAVITY_STRENGTH;
+		// engine.world.gravity.x = 0;
+		// engine.world.gravity.y = 0;
+
 
 		bodies.forEach((b, i) => {
+			// const d = Math.sin(tick * b.densitySpeed) * b.maxDensity;
+			// Body.setMass(b, d);
+			// if (i === 0) console.log(d);
+			
+			b.gravity.x = Math.cos((tick + (i * 123)) * b.gravitySpeed.x) * OWN_GRAVITY_STRENGTH;
+			b.gravity.y = Math.cos((tick + (i * 123)) * b.gravitySpeed.y) * OWN_GRAVITY_STRENGTH;
+
+			// if (i === 0) console.log(b.gravity);
+			Body.applyForce(b, b.position, b.gravity);
+
+			if (b.velocity.length() > 22) Body.setVelocity(b, b.velocity.normalize().multiply({ x: 22, y: 22 }));
+
+
 			const p0 = new Point (b.position.x, b.position.y);
 			shapes[0][i].position = view.center.clone().add(p0);
 			shapes[0][i].rotation = b.angle;
 
 			const p1 = new Point (b.position.x * -1, b.position.y);
 			shapes[1][i].position = view.center.clone().add(p1);
-			shapes[1][i].rotation = b.angle * -1;
+			shapes[1][i].rotation = (b.angle * -1);
 
 			const p2 = new Point (b.position.x * -1, b.position.y * -1);
 			shapes[2][i].position = view.center.clone().add(p2);
@@ -209,7 +265,7 @@ const Kalidoscope = () => {
 
 			const p3 = new Point (b.position.x, b.position.y * -1);
 			shapes[3][i].position = view.center.clone().add(p3);
-			shapes[3][i].rotation = b.angle * -1;
+			shapes[3][i].rotation = (b.angle * -1);
 		});
 	}
 
