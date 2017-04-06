@@ -2,23 +2,37 @@ import { Events, Engine, World, Bodies, Body, Render, MouseConstraint, Mouse } f
 const paper = require('paper');
 import Victor from 'victor';
 paper.install(window);
-import TweenMax from 'gsap';
+import 'gsap';
 import _ from 'lodash';
+import { hexToRgb, rgbToHex } from './lib/colour.js';
 
-import { SHAPE_COUNT, WALL_RESTITUTION, BODY_RESTITUTION, BODY_FRICTION, BODY_AIR_FRICTION, BODY_BASE_MASS, BODY_RAND_MASS, BODY_COLLISSION_FORCE, WALL_THICKNESS, SHAPE_RADIUS, GRAVITY_STRENGTH, OWN_GRAVITY_STRENGTH, CLICK_STRENGTH, EXAMPLE_SVG } from './CONSTANTS.js';
+import { SHAPE_COUNT, WALL_RESTITUTION, BODY_RESTITUTION, BODY_FRICTION, BODY_AIR_FRICTION, BODY_BASE_MASS, BODY_RAND_MASS, BODY_COLLISSION_FORCE, WALL_THICKNESS, SHAPE_RADIUS, GRAVITY_STRENGTH, OWN_GRAVITY_STRENGTH, CLICK_STRENGTH, EXAMPLE_SVG, MAX_VELOCITY, MAX_ANGULAR_VELOCITY } from './CONSTANTS.js';
 
 
 const Kalidoscope = () => {
 	let raf, i = 0, x = 0, then, now, tick = 0, delta = 1, isInit = false;
 	let walls = [], bodies = [], shapes = [[],[], [], []], collissions = [];
 	let engine;
+	let colorTl, currentColor;
 
 	const canvas = document.getElementsByClassName('interactive-background')[0];
 	paper.setup(canvas);
 
+	const colors = canvas.dataset.colors ? canvas.dataset.colors.split(',') : null;
+
+	const svgFromString = (string) => {
+		const template = document.createElement('template');
+		template.innerHTML = string;
+		return template.content.firstElementChild;
+	}
+
+	// const customSVG = canvas.dataset.customSvg ? canvas.dataset.customSvg : null;
+	const customSVG = svgFromString(EXAMPLE_SVG);
+	console.log(customSVG);
+
 	project.currentStyle = {
 		strokeColor: '#000000',
-		fillColor: '#000000',
+		fillColor: colors && colors.length ? colors[colors.length -1] : '#000000',
 		strokeWidth: 0,
 		opacity: 0.5,
 	};
@@ -37,6 +51,8 @@ const Kalidoscope = () => {
 	}
 
 	const init = () => {
+		if (colors && colors.length) currentColor = hexToRgb(colors[colors.length -1]);
+
 		engine = Engine.create();
 		walls = [
 			Bodies.rectangle(
@@ -76,7 +92,6 @@ const Kalidoscope = () => {
 
 		for (let i = 0; i < SHAPE_COUNT; i++){
 			const scale = (((len - SHAPE_RADIUS) / SHAPE_COUNT) * i) + SHAPE_RADIUS * 2;
-			// console.log(scale);
 			const pos = new Victor(-1, -1).normalize().rotateByDeg(Math.random() * 45 - 90).multiply(new Victor(scale * -1, scale * -1));
 			if (pos.y < (window.innerHeight * -1) + SHAPE_RADIUS) pos.y = (window.innerHeight * -1) + SHAPE_RADIUS + 10;
 			if (pos.x < (window.innerWidth * -1) + SHAPE_RADIUS) pos.x = (window.innerWidth * -1) + SHAPE_RADIUS + 10;
@@ -97,24 +112,35 @@ const Kalidoscope = () => {
 			bodies.push(b)
 		}
 
+		const generatePath = (p, s) => {
+			if (customSVG === undefined) return new Path.Circle(view.center.clone().add(p), SHAPE_RADIUS);
+			const svg = project.importSVG(customSVG);
+			svg.strokeWidth = 0;
+			svg.bounds.width = SHAPE_RADIUS * 2;
+			svg.bounds.height = SHAPE_RADIUS * 2;
+			svg.scale(s.x, s.y);
+			console.log(svg);
+			return svg;
+		}
+
 		bodies.forEach(b => {
 			const p0 = new Point (b.position.x, b.position.y);
-			const pa0 = new Path.Circle(view.center.clone().add(p0), SHAPE_RADIUS);
+			const pa0 = generatePath(p0, { x: 1, y: 1 });
 			pa0.opacity = 0;
 			shapes[0].push(pa0);
 
 			const p1 = new Point (b.position.x * -1, b.position.y);
-			const pa1 = new Path.Circle(view.center.clone().add(p1), SHAPE_RADIUS);
+			const pa1 = generatePath(p1, { x: -1, y: 1 });
 			pa1.opacity = 0;
 			shapes[1].push(pa1);
 
 			const p2 = new Point (b.position.x * -1, b.position.y * -1);
-			const pa2 = new Path.Circle(view.center.clone().add(p2), SHAPE_RADIUS);
+			const pa2 = generatePath(p2, { x: -1, y: -1 });
 			pa2.opacity = 0;
 			shapes[2].push(pa2);
 
 			const p3 = new Point (b.position.x, b.position.y * -1);
-			const pa3 = new Path.Circle(view.center.clone().add(p3), SHAPE_RADIUS);
+			const pa3 = generatePath(p3, { x: 1, y: -1 });
 			pa3.opacity = 0;
 			shapes[3].push(pa3);
 		});
@@ -130,6 +156,13 @@ const Kalidoscope = () => {
 		window.addEventListener('mousedown', onClick);
 		window.addEventListener('touchstart', onClick);
 
+		if (colors.length) {
+			colorTl = new TimelineLite({ onComplete: () => colorTl.restart() });
+			colors.forEach(c => {
+				colorTl.to(currentColor, 5, {...hexToRgb(c), ease: Power0.easeNone, onUpdate: updateColor });
+			});
+		}
+
 		show();
 		isInit = true;
 	}
@@ -141,6 +174,7 @@ const Kalidoscope = () => {
 		Events.off(engine, 'afterUpdate', update);
 		Events.off(engine, 'beforeUpdate', onBeforeUpdate);
 		Events.off(engine, 'collisionStart', onCollisionStart);
+		if (colorTl) colorTl.kill();
 		engine = undefined;
 		then = undefined;
 		project.activeLayer.removeChildren();
@@ -170,6 +204,11 @@ const Kalidoscope = () => {
 		shapes.forEach(s => TweenMax.staggerTo(s, 1.2, { opacity: 0, ease: Sine.easeInOut }, 0.12));
 	}
 
+	const updateColor = () => {
+		const c = `rgb(${Math.floor(currentColor.r)}, ${Math.floor(currentColor.g)}, ${Math.floor(currentColor.b)})`;
+		_.flattenDeep(shapes).forEach(s => s.fillColor = c);
+	}
+
 	const onClick = (e) => {
 		let x = e.touches ? e.touches[0].clientX : e.clientX;
 		let y = e.touches ? e.touches[0].clientY : e.clientY;
@@ -187,9 +226,8 @@ const Kalidoscope = () => {
 		bodies.forEach(b => {
 			const mP = new Victor(x, y);
 			const dist = mP.distance(new Victor(b.position.x, b.position.y));
-			let scale = (1 - dist / Math.min(window.innerWidth * 0.5, window.innerHeight * 0.5)) * CLICK_STRENGTH;
+			let scale = (1 - dist / Math.min(window.innerWidth * 0.3, window.innerHeight * 0.3)) * CLICK_STRENGTH;
 			scale = Math.max(scale, 0);
-			console.log(scale);
 			const force = new Victor(
 				b.position.x - mP.x,
 				b.position.y - mP.y,
@@ -248,7 +286,8 @@ const Kalidoscope = () => {
 			// if (i === 0) console.log(b.gravity);
 			Body.applyForce(b, b.position, b.gravity);
 
-			if (b.velocity.length() > 22) Body.setVelocity(b, b.velocity.normalize().multiply({ x: 22, y: 22 }));
+			if (b.velocity.length() > MAX_VELOCITY) Body.setVelocity(b, b.velocity.normalize().multiply({ x: MAX_VELOCITY, y: MAX_VELOCITY }));
+			if (b.angularVelocity > MAX_ANGULAR_VELOCITY) Body.setAngularVelocity(b, MAX_ANGULAR_VELOCITY);
 
 
 			const p0 = new Point (b.position.x, b.position.y);
