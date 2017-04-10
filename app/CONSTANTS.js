@@ -1,8 +1,8 @@
 export const SHAPE_COUNT = 4;
 export const WALL_RESTITUTION = 1;
-export const BODY_RESTITUTION = 1.2;
-export const BODY_FRICTION = 0.08;
-export const BODY_AIR_FRICTION = 0.05;
+export const BODY_RESTITUTION = 1;
+export const BODY_FRICTION = 0.04;
+export const BODY_AIR_FRICTION = 0.04;
 export const BODY_BASE_MASS = 0.001;
 export const BODY_RAND_MASS = 0.001;
 
@@ -13,9 +13,11 @@ export const OWN_GRAVITY_STRENGTH = 0.0006;
 export const CLICK_STRENGTH = 0.3;
 
 export const MAX_VELOCITY = 17;
-export const MAX_ANGULAR_VELOCITY = 22;
+export const MAX_ANGULAR_VELOCITY = 20;
 
-export const BODY_COLLISSION_FORCE = 0.008;
+export const BODY_COLLISSION_FORCE = 0.045;
+
+export const COLOUR_CHANGE_SPEED = 15;
 
 export const EXAMPLE_SVG = `
 		<svg width="335px" height="240px" viewBox="0 0 335 240" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">

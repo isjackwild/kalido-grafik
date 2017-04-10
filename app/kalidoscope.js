@@ -6,7 +6,25 @@ import 'gsap';
 import _ from 'lodash';
 import { hexToRgb, rgbToHex } from './lib/colour.js';
 
-import { SHAPE_COUNT, WALL_RESTITUTION, BODY_RESTITUTION, BODY_FRICTION, BODY_AIR_FRICTION, BODY_BASE_MASS, BODY_RAND_MASS, BODY_COLLISSION_FORCE, WALL_THICKNESS, SHAPE_RADIUS, GRAVITY_STRENGTH, OWN_GRAVITY_STRENGTH, CLICK_STRENGTH, EXAMPLE_SVG, MAX_VELOCITY, MAX_ANGULAR_VELOCITY } from './CONSTANTS.js';
+import {
+	SHAPE_COUNT,
+	WALL_RESTITUTION,
+	BODY_RESTITUTION,
+	BODY_FRICTION,
+	BODY_AIR_FRICTION,
+	BODY_BASE_MASS,
+	BODY_RAND_MASS,
+	BODY_COLLISSION_FORCE,
+	WALL_THICKNESS,
+	SHAPE_RADIUS,
+	GRAVITY_STRENGTH,
+	OWN_GRAVITY_STRENGTH,
+	CLICK_STRENGTH,
+	EXAMPLE_SVG,
+	MAX_VELOCITY,
+	MAX_ANGULAR_VELOCITY,
+	COLOUR_CHANGE_SPEED,
+} from './CONSTANTS.js';
 
 
 const Kalidoscope = () => {
@@ -26,9 +44,8 @@ const Kalidoscope = () => {
 		return template.content.firstElementChild;
 	}
 
-	// const customSVG = canvas.dataset.customSvg ? canvas.dataset.customSvg : null;
-	const customSVG = svgFromString(EXAMPLE_SVG);
-	console.log(customSVG);
+	const customSVG = canvas.dataset.customSvg ? canvas.dataset.customSvg : null;
+	// const customSVG = svgFromString(EXAMPLE_SVG);
 
 	project.currentStyle = {
 		strokeColor: '#000000',
@@ -85,6 +102,10 @@ const Kalidoscope = () => {
 				wallOptions
 			), //right
 		];
+		walls[0].hitForce = new Victor(0, 1);
+		walls[1].hitForce = new Victor(0, -1);
+		walls[2].hitForce = new Victor(1, 0);
+		walls[3].hitForce = new Victor(-1, 0);
 		walls.forEach(w => w.label = 'wall');
 		
 		const len = Math.sqrt((window.innerWidth * window.innerWidth) + (window.innerHeight * window.innerHeight)) / 2 * 0.8;
@@ -102,9 +123,10 @@ const Kalidoscope = () => {
 			// bodyOptions.mass = -0.00000001;
 			const b = Bodies.circle(pos.x, pos.y, SHAPE_RADIUS, bodyOptions);
 			b.velocity = new Victor(0, 0);
+			b.position = new Victor(pos.x, pos.y);
 			b.label = 'shape';
 			b.gravity = { x: 0, y: 0 };
-			b.gravitySpeed = { x: Math.random() * 0.005 + 0.003, y: Math.random() * 0.005 + 0.003 };
+			b.gravitySpeed = { x: Math.random() * 0.008 + 0.005, y: Math.random() * 0.008 + 0.005 };
 			// b.maxDensity = Math.random() * BODY_RAND_MASS + BODY_BASE_MASS;
 			// b.densityOffset = Math.random() * 1000;
 			// b.densitySpeed = Math.random() * 0.012;
@@ -113,7 +135,7 @@ const Kalidoscope = () => {
 		}
 
 		const generatePath = (p, s) => {
-			if (customSVG === undefined) return new Path.Circle(view.center.clone().add(p), SHAPE_RADIUS);
+			if (!customSVG) return new Path.Circle(view.center.clone().add(p), SHAPE_RADIUS);
 			const svg = project.importSVG(customSVG);
 			svg.strokeWidth = 0;
 			svg.bounds.width = SHAPE_RADIUS * 2;
@@ -156,10 +178,10 @@ const Kalidoscope = () => {
 		window.addEventListener('mousedown', onClick);
 		window.addEventListener('touchstart', onClick);
 
-		if (colors.length) {
+		if (colors && colors.length) {
 			colorTl = new TimelineLite({ onComplete: () => colorTl.restart() });
 			colors.forEach(c => {
-				colorTl.to(currentColor, 5, {...hexToRgb(c), ease: Power0.easeNone, onUpdate: updateColor });
+				colorTl.to(currentColor, COLOUR_CHANGE_SPEED, {...hexToRgb(c), ease: Power0.easeNone, onUpdate: updateColor });
 			});
 		}
 
@@ -239,17 +261,32 @@ const Kalidoscope = () => {
 
 	const onBeforeUpdate = () => {
 		collissions.forEach(p => {
-			const forceA = new Victor(
-				p.bodyA.position.x - p.bodyB.position.x,
-				p.bodyA.position.y - p.bodyB.position.y,
-			).norm().multiply(new Victor(BODY_COLLISSION_FORCE, BODY_COLLISSION_FORCE));
-			Body.applyForce(p.bodyA, p.bodyB.position, forceA);
+			if (p.bodyA.label === 'wall') {
+				Body.applyForce(
+					p.bodyB,
+					p.bodyB.position.clone().subtract(p.bodyA.hitForce),
+					p.bodyA.hitForce.clone().multiply(new Victor(BODY_COLLISSION_FORCE, BODY_COLLISSION_FORCE))
+				);
+			} else if (p.bodyB.label === 'wall') {
+				Body.applyForce(
+					p.bodyA,
+					p.bodyA.position.clone().subtract(p.bodyB.hitForce),
+					p.bodyB.hitForce.clone().multiply(new Victor(BODY_COLLISSION_FORCE, BODY_COLLISSION_FORCE))
+				);
+			} else {
+				const forceA = new Victor(
+					p.bodyA.position.x - p.bodyB.position.x,
+					p.bodyA.position.y - p.bodyB.position.y,
+				).norm().multiply(new Victor(BODY_COLLISSION_FORCE, BODY_COLLISSION_FORCE));
+				Body.applyForce(p.bodyA, p.bodyB.position, forceA);
 
-			const forceB = new Victor(
-				p.bodyB.position.x - p.bodyA.position.x,
-				p.bodyB.position.y - p.bodyA.position.y,
-			).norm().multiply(new Victor(BODY_COLLISSION_FORCE, BODY_COLLISSION_FORCE));
-			Body.applyForce(p.bodyB, p.bodyA.position, forceB);
+				const forceB = new Victor(
+					p.bodyB.position.x - p.bodyA.position.x,
+					p.bodyB.position.y - p.bodyA.position.y,
+				).norm().multiply(new Victor(BODY_COLLISSION_FORCE, BODY_COLLISSION_FORCE));
+				Body.applyForce(p.bodyB, p.bodyA.position, forceB);
+			}
+
 		});
 
 		collissions = [];
@@ -282,8 +319,6 @@ const Kalidoscope = () => {
 			
 			b.gravity.x = Math.cos((tick + (i * 123)) * b.gravitySpeed.x) * OWN_GRAVITY_STRENGTH;
 			b.gravity.y = Math.cos((tick + (i * 123)) * b.gravitySpeed.y) * OWN_GRAVITY_STRENGTH;
-
-			// if (i === 0) console.log(b.gravity);
 			Body.applyForce(b, b.position, b.gravity);
 
 			if (b.velocity.length() > MAX_VELOCITY) Body.setVelocity(b, b.velocity.normalize().multiply({ x: MAX_VELOCITY, y: MAX_VELOCITY }));
