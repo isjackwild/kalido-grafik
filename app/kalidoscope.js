@@ -8,6 +8,7 @@ import { hexToRgb, rgbToHex } from './lib/colour.js';
 
 import {
 	SHAPE_COUNT,
+	SHAPE_COUNT_MOB,
 	WALL_RESTITUTION,
 	BODY_RESTITUTION,
 	BODY_FRICTION,
@@ -15,6 +16,7 @@ import {
 	BODY_BASE_MASS,
 	BODY_RAND_MASS,
 	BODY_COLLISSION_FORCE,
+	BODY_COLLISSION_FORCE_SMALL,
 	WALL_THICKNESS,
 	SHAPE_RADIUS,
 	GRAVITY_STRENGTH,
@@ -26,6 +28,14 @@ import {
 	COLOUR_CHANGE_SPEED,
 } from './CONSTANTS.js';
 
+let customSVG;
+
+function shuffle(a) {
+    for (let i = a.length; i; i--) {
+        let j = Math.floor(Math.random() * i);
+        [a[i - 1], a[j]] = [a[j], a[i - 1]];
+    }
+}
 
 const Kalidoscope = () => {
 	let raf, i = 0, x = 0, then, now, tick = 0, delta = 1, isInit = false;
@@ -36,16 +46,15 @@ const Kalidoscope = () => {
 	const canvas = document.getElementsByClassName('interactive-background')[0];
 	paper.setup(canvas);
 
-	const colors = canvas.dataset.colors ? canvas.dataset.colors.split(',') : null;
+	let colors = canvas.dataset.colors ? canvas.dataset.colors.split(',') : null;
+	colors.pop();
+	shuffle(colors);
+	
 
-	const svgFromString = (string) => {
-		const template = document.createElement('template');
-		template.innerHTML = string;
-		return template.content.firstElementChild;
-	}
+	let bodyCollissionForce = (window.innerWidth <= 375) ? BODY_COLLISSION_FORCE_SMALL : BODY_COLLISSION_FORCE;
 
-	const customSVG = canvas.dataset.customSvg ? canvas.dataset.customSvg : null;
-	// const customSVG = svgFromString(EXAMPLE_SVG);
+	const customSvgWrapper = document.getElementsByClassName('interactive-background__custom-svg')[0];
+	const customSVG = customSvgWrapper.getElementsByTagName('svg')[0];
 
 	project.currentStyle = {
 		strokeColor: '#000000',
@@ -68,6 +77,12 @@ const Kalidoscope = () => {
 	}
 
 	const init = () => {
+		let shape_radius;
+		if (window.innerWidth <= 414) {
+			shape_radius = canvas.dataset.shapeRadiusMob ? (parseInt(canvas.dataset.shapeRadiusMob) || SHAPE_RADIUS) : SHAPE_RADIUS; 
+		} else {
+			shape_radius = canvas.dataset.shapeRadius ? (parseInt(canvas.dataset.shapeRadius) || SHAPE_RADIUS) : SHAPE_RADIUS; 
+		}
 		if (colors && colors.length) currentColor = hexToRgb(colors[colors.length -1]);
 
 		engine = Engine.create();
@@ -109,39 +124,44 @@ const Kalidoscope = () => {
 		walls.forEach(w => w.label = 'wall');
 		
 		const len = Math.sqrt((window.innerWidth * window.innerWidth) + (window.innerHeight * window.innerHeight)) / 2 * 0.8;
-		// const len = Math.min(window.innerWidth, window.innerHeight) * 0.5;
+		const shapeCount = (()=> {
+			return 3 // delete this line when you want to revert to it being dependent on screen size / ie. NOT the EU flag!
+			if (window.innerWidth <= 667 && window.innerWidth > window.innerHeight) return 1;
+			if (window.innerWidth <= 375) return 1;
+			if (window.innerWidth <= 1024) return 3;
+			return 4; 
+		})();
 
-		for (let i = 0; i < SHAPE_COUNT; i++){
-			const scale = (((len - SHAPE_RADIUS) / SHAPE_COUNT) * i) + SHAPE_RADIUS * 2;
-			const pos = new Victor(-1, -1).normalize().rotateByDeg(Math.random() * 45 - 90).multiply(new Victor(scale * -1, scale * -1));
-			if (pos.y < (window.innerHeight * -1) + SHAPE_RADIUS) pos.y = (window.innerHeight * -1) + SHAPE_RADIUS + 10;
-			if (pos.x < (window.innerWidth * -1) + SHAPE_RADIUS) pos.x = (window.innerWidth * -1) + SHAPE_RADIUS + 10;
+		for (let i = 0; i < shapeCount; i++){
+			const scale = (((len - shape_radius) / shapeCount) * i) + shape_radius * 2;
+			const pos = new Victor(-1, -1).normalize().rotateByDeg(45).multiply(new Victor(scale * -1, scale * -1));
+			if (pos.y < (window.innerHeight * -1) + shape_radius) pos.y = (window.innerHeight * -1) + shape_radius + 10;
+			if (pos.x < (window.innerWidth * -1) + shape_radius) pos.x = (window.innerWidth * -1) + shape_radius + 10;
 
-			bodyOptions.density = Math.random() * BODY_RAND_MASS + BODY_BASE_MASS;
-			// if (Math.random() > 0.5) bodyOptions.density *= -1;
-			// b.mass = 
-			// bodyOptions.mass = -0.00000001;
-			const b = Bodies.circle(pos.x, pos.y, SHAPE_RADIUS, bodyOptions);
+			const yScale = (i+0.5) / (shapeCount + 1);
+			const maxSpreadY = (window.innerHeight * 0.5) - (shape_radius * 2);
+			const maxSpreadX = (window.innerWidth * 0.5) - (shape_radius * 2);
+			pos.y = -1 * yScale * (window.innerHeight / 2) - shape_radius * 0.5;
+			pos.x = -1 * (Math.random() * maxSpreadX) - shape_radius;
+
+			const b = Bodies.circle(pos.x, pos.y, shape_radius, bodyOptions);
 			b.velocity = new Victor(0, 0);
 			b.position = new Victor(pos.x, pos.y);
 			b.label = 'shape';
 			b.gravity = { x: 0, y: 0 };
 			b.gravitySpeed = { x: Math.random() * 0.008 + 0.005, y: Math.random() * 0.008 + 0.005 };
-			// b.maxDensity = Math.random() * BODY_RAND_MASS + BODY_BASE_MASS;
-			// b.densityOffset = Math.random() * 1000;
-			// b.densitySpeed = Math.random() * 0.012;
+			Body.setMass(b, Math.random() * BODY_RAND_MASS + BODY_BASE_MASS)
 
 			bodies.push(b)
 		}
 
 		const generatePath = (p, s) => {
-			if (!customSVG) return new Path.Circle(view.center.clone().add(p), SHAPE_RADIUS);
+			if (!customSVG) return new Path.Circle(view.center.clone().add(p), shape_radius);
 			const svg = project.importSVG(customSVG);
 			svg.strokeWidth = 0;
-			svg.bounds.width = SHAPE_RADIUS * 2;
-			svg.bounds.height = SHAPE_RADIUS * 2;
+			svg.bounds.width = shape_radius * 1.8;
+			svg.bounds.height = shape_radius * 1.8;
 			svg.scale(s.x, s.y);
-			console.log(svg);
 			return svg;
 		}
 
@@ -212,6 +232,7 @@ const Kalidoscope = () => {
 		canvas.style.width = window.innerWidth + 'px';
 		view.size.set(window.innerWidth, window.innerHeight);
 		view.viewSize.set(window.innerWidth, window.innerHeight);
+		bodyCollissionForce = (window.innerWidth <= 375) ? BODY_COLLISSION_FORCE_SMALL : BODY_COLLISSION_FORCE;
 		kill();
 		requestAnimationFrame(() => {
 			init();
@@ -219,11 +240,11 @@ const Kalidoscope = () => {
 	}
 
 	const show = () => {
-		shapes.forEach(s => TweenMax.staggerTo(s, 1.2, { opacity: 1, ease: Sine.easeInOut }, 0.12));
+		shapes.forEach(s => TweenMax.staggerTo(s, 0.33, { opacity: 1, ease: Sine.easeInOut }, 0.15));
 	}
 
 	const hide = () => {
-		shapes.forEach(s => TweenMax.staggerTo(s, 1.2, { opacity: 0, ease: Sine.easeInOut }, 0.12));
+		shapes.forEach(s => TweenMax.staggerTo(s, 0.33, { opacity: 0, ease: Sine.easeInOut }, 0.15));
 	}
 
 	const updateColor = () => {
@@ -265,25 +286,25 @@ const Kalidoscope = () => {
 				Body.applyForce(
 					p.bodyB,
 					p.bodyB.position.clone().subtract(p.bodyA.hitForce),
-					p.bodyA.hitForce.clone().multiply(new Victor(BODY_COLLISSION_FORCE, BODY_COLLISSION_FORCE))
+					p.bodyA.hitForce.clone().multiply(new Victor(bodyCollissionForce, bodyCollissionForce))
 				);
 			} else if (p.bodyB.label === 'wall') {
 				Body.applyForce(
 					p.bodyA,
 					p.bodyA.position.clone().subtract(p.bodyB.hitForce),
-					p.bodyB.hitForce.clone().multiply(new Victor(BODY_COLLISSION_FORCE, BODY_COLLISSION_FORCE))
+					p.bodyB.hitForce.clone().multiply(new Victor(bodyCollissionForce, bodyCollissionForce))
 				);
 			} else {
 				const forceA = new Victor(
 					p.bodyA.position.x - p.bodyB.position.x,
 					p.bodyA.position.y - p.bodyB.position.y,
-				).norm().multiply(new Victor(BODY_COLLISSION_FORCE, BODY_COLLISSION_FORCE));
+				).norm().multiply(new Victor(bodyCollissionForce, bodyCollissionForce));
 				Body.applyForce(p.bodyA, p.bodyB.position, forceA);
 
 				const forceB = new Victor(
 					p.bodyB.position.x - p.bodyA.position.x,
 					p.bodyB.position.y - p.bodyA.position.y,
-				).norm().multiply(new Victor(BODY_COLLISSION_FORCE, BODY_COLLISSION_FORCE));
+				).norm().multiply(new Victor(bodyCollissionForce, bodyCollissionForce));
 				Body.applyForce(p.bodyB, p.bodyA.position, forceB);
 			}
 
@@ -304,18 +325,11 @@ const Kalidoscope = () => {
 		then = now;
 		now = new Date().getTime();
 		tick += delta;
-		// console.log(tick);
 
 		engine.world.gravity.x = Math.cos(tick * 0.006) * GRAVITY_STRENGTH;
 		engine.world.gravity.y = Math.cos(tick * 0.01) * GRAVITY_STRENGTH;
-		// engine.world.gravity.x = 0;
-		// engine.world.gravity.y = 0;
-
 
 		bodies.forEach((b, i) => {
-			// const d = Math.sin(tick * b.densitySpeed) * b.maxDensity;
-			// Body.setMass(b, d);
-			// if (i === 0) console.log(d);
 			
 			b.gravity.x = Math.cos((tick + (i * 123)) * b.gravitySpeed.x) * OWN_GRAVITY_STRENGTH;
 			b.gravity.y = Math.cos((tick + (i * 123)) * b.gravitySpeed.y) * OWN_GRAVITY_STRENGTH;

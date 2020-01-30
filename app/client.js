@@ -6,6 +6,7 @@ let k;
 const kickIt = () => {
 	k = Kalidoscope();
 	k.init();
+	window.kalido = k;
 
 	window.addEventListener('resize', _.debounce(onResize, 333));
 }

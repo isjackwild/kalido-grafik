@@ -1,17 +1,1 @@
-html, body {
-  overflow: hidden;
-}
-
-body {
-  background: #cccccc;
-}
-
-.interactive-background {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-}
-
-/*# sourceMappingURL=data:application/json;charset=utf8;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoibWFpbi5jc3MiLCJzb3VyY2VzIjpbIm1haW4uc2NzcyJdLCJzb3VyY2VzQ29udGVudCI6WyJodG1sLCBib2R5IHtcblx0b3ZlcmZsb3c6IGhpZGRlbjtcbn1cblxuYm9keSB7XG5cdGJhY2tncm91bmQ6ICNjY2NjY2M7XG59XG5cbi5pbnRlcmFjdGl2ZS1iYWNrZ3JvdW5kIHtcblx0cG9zaXRpb246IGFic29sdXRlO1xuXHR0b3A6IDA7XG5cdGxlZnQ6IDA7XG5cdHdpZHRoOiAxMDAlO1xuXHRoZWlnaHQ6IDEwMCU7XG59Il0sIm1hcHBpbmdzIjoiQUFBQSxBQUFBLElBQUksRUFBRSxBQUFBLElBQUksQ0FBQztFQUNWLFFBQVEsRUFBRSxNQUFPO0NBQ2pCOztBQUVELEFBQUEsSUFBSSxDQUFDO0VBQ0osVUFBVSxFQUFFLE9BQVE7Q0FDcEI7O0FBRUQsQUFBQSx1QkFBdUIsQ0FBQztFQUN2QixRQUFRLEVBQUUsUUFBUztFQUNuQixHQUFHLEVBQUUsQ0FBRTtFQUNQLElBQUksRUFBRSxDQUFFO0VBQ1IsS0FBSyxFQUFFLElBQUs7RUFDWixNQUFNLEVBQUUsSUFBSztDQUNiIiwibmFtZXMiOltdfQ== */
+html,body{overflow:hidden}body{background:#cccccc}.interactive-background{position:absolute;top:0;left:0;width:100%;height:100%}
